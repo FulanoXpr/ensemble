@@ -11,7 +11,7 @@
   "claude": {
     "name": "claude",
     "command": "claude",
-    "flags": ["--dangerously-skip-permissions"],
+    "flags": [],
     "readyMarker": "❯",
     "inputMethod": "sendKeys",
     "color": "green",

@@ -1,31 +1,108 @@
 {
-  "name": "ensemble",
-  "version": "1.0.0",
-  "description": "Standalone multi-agent collaboration engine — Codex + Claude working together",
-  "type": "module",
-  "bin": {
-    "ensemble": "./cli/ensemble.ts"
+  "name": "ensemble-vscode",
+  "displayName": "Ensemble — Multi-Agent Collaboration",
+  "description": "Orchestrate AI agents (Claude Code, Codex, Gemini CLI) into collaborative teams inside VSCode",
+  "version": "0.1.0",
+  "publisher": "fulano",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ensemble.createTeam",
+        "title": "Ensemble: Create Team"
+      },
+      {
+        "command": "ensemble.disbandTeam",
+        "title": "Ensemble: Disband Team"
+      },
+      {
+        "command": "ensemble.showMissionControl",
+        "title": "Ensemble: Show Mission Control"
+      },
+      {
+        "command": "ensemble.sendMessage",
+        "title": "Ensemble: Send Message to Team"
+      },
+      {
+        "command": "ensemble.listTeams",
+        "title": "Ensemble: List Teams"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ensemble",
+          "title": "Ensemble",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ensemble": [
+        {
+          "type": "webview",
+          "id": "ensemble.sidebar",
+          "name": "Teams"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Ensemble",
+      "properties": {
+        "ensemble.serverPort": {
+          "type": "number",
+          "default": 23000,
+          "description": "Port for the embedded Ensemble HTTP server"
+        },
+        "ensemble.agentsConfigPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to agents.json (leave empty for bundled default)"
+        },
+        "ensemble.autoDisband": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically disband teams when agents signal completion"
+        },
+        "ensemble.useWorktrees": {
+          "type": "boolean",
+          "default": false,
+          "description": "Isolate each agent in its own git worktree"
+        },
+        "ensemble.claudeSkipPermissions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --dangerously-skip-permissions to Claude Code (requires confirmation dialog)"
+        }
+      }
+    }
   },
   "scripts": {
-    "dev": "tsx server.ts",
-    "start": "NODE_ENV=production tsx server.ts",
-    "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts",
-    "monitor": "tsx cli/monitor.ts --latest",
-    "cli": "tsx cli/ensemble.ts"
-  },
-  "dependencies": {
-    "tsx": "^4.0.0",
-    "uuid": "^9.0.0"
+    "compile": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/uuid": "^9.0.0",
-    "eslint": "^8.57.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@types/vscode": "^1.95.0",
+    "esbuild": "^0.24.0",
     "typescript": "^5.5.0",
     "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0",
+    "uuid": "^9.0.0"
   }
 }
