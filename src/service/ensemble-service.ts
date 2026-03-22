@@ -9,6 +9,11 @@ import type {
   EnsembleTeam, EnsembleMessage, CreateTeamRequest,
   CollabTemplate, CollabTemplatesFile,
 } from '../core/types.js'
+
+/** Sanitize session name — must match agent-spawner's computeSessionName */
+function sanitizeSessionName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9\-_.]/g, '')
+}
 import {
   createTeam, getTeam, updateTeam, loadTeams,
   appendMessage, getMessages,
@@ -387,7 +392,7 @@ export async function createEnsembleTeam(
     console.log(`[Ensemble] Waiting for all ${activeAgents.length} agents to be ready...`)
     const readyResults = await Promise.all(
       activeAgents.map(agent => {
-        const sessionName = `${team.name}-${agent.name}`
+        const sessionName = sanitizeSessionName(`${team.name}-${agent.name}`)
         return waitForReady(sessionName, agent.program, agent.hostId).then(ready => ({ agent, sessionName, ready }))
       })
     )
@@ -595,7 +600,7 @@ export async function writeDisbandSummary(teamId: string): Promise<void> {
     team.agents
       .filter(a => a.status === 'active')
       .map(async (agent) => {
-        const sessionName = `${team.name}-${agent.name}`
+        const sessionName = sanitizeSessionName(`${team.name}-${agent.name}`)
         tokenUsageMap[agent.name] = await getAgentTokenUsage(sessionName)
       })
   )
@@ -630,7 +635,7 @@ export async function disbandTeam(teamId: string): Promise<ServiceResult<{ team:
     team.agents
       .filter(a => a.status === 'active')
       .map(async (agent) => {
-        const sessionName = `${team.name}-${agent.name}`
+        const sessionName = sanitizeSessionName(`${team.name}-${agent.name}`)
         tokenUsageMap[agent.name] = await getAgentTokenUsage(sessionName)
       })
   )
@@ -645,7 +650,7 @@ export async function disbandTeam(teamId: string): Promise<ServiceResult<{ team:
       })
 
       try {
-        await killLocalAgent(`${team.name}-${agent.name}`)
+        await killLocalAgent(sanitizeSessionName(`${team.name}-${agent.name}`))
       } catch { /* session may already be gone */ }
     }
   }
