@@ -4,17 +4,38 @@
   "description": "Orchestrate AI agents (Claude Code, Codex, Gemini CLI) into collaborative teams inside VSCode",
   "version": "0.1.0",
   "publisher": "fulano",
-  "engines": { "vscode": "^1.95.0" },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      { "command": "ensemble.createTeam", "title": "Ensemble: Create Team" },
-      { "command": "ensemble.disbandTeam", "title": "Ensemble: Disband Team" },
-      { "command": "ensemble.showMissionControl", "title": "Ensemble: Show Mission Control" },
-      { "command": "ensemble.sendMessage", "title": "Ensemble: Send Message to Team" },
-      { "command": "ensemble.listTeams", "title": "Ensemble: List Teams" }
+      {
+        "command": "ensemble.createTeam",
+        "title": "Ensemble: Create Team"
+      },
+      {
+        "command": "ensemble.disbandTeam",
+        "title": "Ensemble: Disband Team"
+      },
+      {
+        "command": "ensemble.showMissionControl",
+        "title": "Ensemble: Show Mission Control"
+      },
+      {
+        "command": "ensemble.sendMessage",
+        "title": "Ensemble: Send Message to Team"
+      },
+      {
+        "command": "ensemble.listTeams",
+        "title": "Ensemble: List Teams"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -81,6 +102,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "node-pty": "^1.1.0",
     "uuid": "^9.0.0"
   }
 }

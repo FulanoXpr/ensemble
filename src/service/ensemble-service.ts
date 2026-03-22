@@ -358,6 +358,15 @@ export async function createEnsembleTeam(
     const waitForReady = async (
       sessionName: string, program: string, _hostId?: string, maxWait = 60000,
     ): Promise<boolean> => {
+      // For native PTY terminals (VSCode shellPath), we can't capture output
+      // programmatically. Assume ready after a startup delay.
+      if ('isNativePty' in runtime && (runtime as any).isNativePty(sessionName)) {
+        const startupDelay = 5000 // Give CLI 5 seconds to start
+        console.log(`[Ensemble] ${sessionName} is native PTY — assuming ready after ${startupDelay / 1000}s`)
+        await new Promise(r => setTimeout(r, startupDelay))
+        return true
+      }
+
       const start = Date.now()
       const agentConfig = resolveAgentProgram(program)
       const readyMarker = agentConfig.readyMarker

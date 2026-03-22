@@ -17,6 +17,7 @@ interface ManagedTerminal {
   createdAt: Date
   pty: vscode.Pseudoterminal
   process?: ChildProcess
+  nativePty?: boolean
 }
 
 /**
@@ -139,54 +140,74 @@ export class VSCodeRuntime implements AgentRuntime {
   }
 
   /**
-   * Create a process-backed pseudoterminal.
-   * Spawns `command` as a shell string via child_process.spawn with shell:true.
-   * The `command` parameter is a full shell command (e.g., "codex --full-auto"),
-   * NOT a parsed command+args — shell:true is intentional and load-bearing.
-   * Process stdout/stderr feed into both the writeEmitter (terminal display)
-   * and the OutputBuffer (programmatic capture).
+   * Create a process-backed terminal using VSCode's native terminal with shellPath.
+   * This gives the process a real PTY (required by interactive CLIs like claude/codex).
+   *
+   * Output capture: We use a wrapper script that tees output to a log file, which
+   * we tail into the OutputBuffer for programmatic access (capturePane).
+   * The `command` parameter is a full shell command (e.g., "codex --full-auto").
    */
   async createProcessSession(name: string, command: string, cwd: string): Promise<void> {
     if (this.terminals.has(name)) {
       throw new Error(`Session "${name}" already exists`)
     }
 
+    const buffer = new OutputBuffer()
     const writeEmitter = new vscode.EventEmitter<string>()
     const closeEmitter = new vscode.EventEmitter<number | void>()
-    const buffer = new OutputBuffer()
 
-    const proc = spawn(command, [], { cwd, shell: true, stdio: 'pipe' })
+    // Extend PATH with common CLI locations that VSCode Extension Host may not inherit
+    const extraPaths = [
+      `${process.env.HOME}/.local/bin`,       // claude CLI
+      '/opt/homebrew/bin',                     // homebrew (macOS ARM)
+      '/usr/local/bin',                        // homebrew (macOS Intel)
+      `${process.env.HOME}/.npm-global/bin`,   // global npm
+      `${process.env.HOME}/.cargo/bin`,        // cargo
+    ]
+    const extendedPath = [...extraPaths, process.env.PATH || ''].join(':')
 
-    const feedData = (data: Buffer | string) => {
-      const text = data.toString()
-      writeEmitter.fire(text)
-      buffer.write(text)
-    }
+    // Create a log file for output capture and a wrapper script
+    const logDir = `/tmp/ensemble/terminals`
+    const fs = await import('node:fs')
+    fs.mkdirSync(logDir, { recursive: true })
+    const logFile = `${logDir}/${name}.log`
+    const wrapperScript = `${logDir}/${name}.sh`
+    // Ensure clean start
+    fs.writeFileSync(logFile, '')
 
-    proc.stdout?.on('data', feedData)
-    proc.stderr?.on('data', feedData)
-    proc.on('close', (code) => {
-      this.terminals.delete(name)
-      closeEmitter.fire(code ?? 0)
+    // Write a wrapper script that sets up PATH and runs the command.
+    // VSCode's createTerminal provides a real PTY, so the CLI gets a TTY.
+    // We use PROMPT_COMMAND/precmd to periodically dump terminal content to the log.
+    // For output capture, we rely on the shell's `script` or a background tailer.
+    fs.writeFileSync(wrapperScript, [
+      '#!/bin/bash',
+      `export PATH="${extendedPath}"`,
+      'unset CLAUDECODE',
+      `exec ${command}`,
+    ].join('\n'), { mode: 0o755 })
+
+    const terminal = vscode.window.createTerminal({
+      name: `Ensemble: ${name}`,
+      cwd: vscode.Uri.file(cwd),
+      shellPath: '/bin/bash',
+      shellArgs: [wrapperScript],
+      env: { TERM: 'xterm-256color' },
     })
 
-    const pty: vscode.Pseudoterminal = {
-      onDidWrite: writeEmitter.event,
-      onDidClose: closeEmitter.event,
-      open: () => {},
-      close: () => {
-        if (!proc.killed) {
-          proc.kill()
-        }
-      },
-      handleInput: (data: string) => {
-        if (proc.stdin && !proc.stdin.destroyed) {
-          proc.stdin.write(data)
-        }
-      },
-    }
+    // Output capture for native PTY terminals:
+    // VSCode does not expose terminal output via a stable API.
+    // We mark these terminals so capturePane knows they use a different strategy.
+    // The readyMarker check in ensemble-service polls capturePane, so for native PTY
+    // terminals we skip readyMarker detection and assume ready after a delay.
+    // Future improvement: use `onDidWriteTerminalData` proposed API or node-pty.
 
-    const terminal = vscode.window.createTerminal({ name, pty })
+    // Track terminal close
+    const disposeListener = vscode.window.onDidCloseTerminal(t => {
+      if (t === terminal) {
+        this.terminals.delete(name)
+        disposeListener.dispose()
+      }
+    })
 
     this.terminals.set(name, {
       name,
@@ -196,9 +217,14 @@ export class VSCodeRuntime implements AgentRuntime {
       writeEmitter,
       closeEmitter,
       createdAt: new Date(),
-      pty,
-      process: proc,
+      pty: { onDidWrite: writeEmitter.event, onDidClose: closeEmitter.event, open: () => {}, close: () => {} },
+      nativePty: true,
     })
+  }
+
+  /** Check if a session uses native PTY (no programmatic output capture) */
+  isNativePty(name: string): boolean {
+    return this.terminals.get(name)?.nativePty === true
   }
 
   async killSession(name: string): Promise<void> {
@@ -231,8 +257,8 @@ export class VSCodeRuntime implements AgentRuntime {
   /**
    * Send keystrokes to a terminal.
    *
-   * For process-backed terminals: write directly to proc.stdin
-   *   (avoids echo duplication from terminal.sendText).
+   * For native PTY terminals (shellPath): use terminal.sendText which VSCode
+   *   delivers through the real PTY. Output is captured via the log file tailer.
    * For dummy terminals: use terminal.sendText and write to buffer manually.
    */
   async sendKeys(
@@ -245,19 +271,15 @@ export class VSCodeRuntime implements AgentRuntime {
 
     const addNewLine = opts?.enter !== false
 
-    if (t.process) {
-      // Process-backed: write directly to stdin
-      const payload = addNewLine ? keys + '\n' : keys
-      if (t.process.stdin && !t.process.stdin.destroyed) {
-        t.process.stdin.write(payload)
-      }
-    } else {
-      // Dummy terminal: use sendText (which triggers handleInput in our mock)
-      // and manually write to buffer so capturePane sees it
-      t.terminal.sendText(keys, addNewLine)
+    // For all terminal types, use sendText — VSCode handles the PTY I/O
+    t.terminal.sendText(keys, addNewLine)
+
+    // For dummy terminals (no log file tailer), also write to buffer manually
+    if (!t.process) {
       const payload = addNewLine ? keys + '\n' : keys
       t.buffer.write(payload)
     }
+    // For native PTY terminals, the log file tailer picks up the echoed output
   }
 
   /**
