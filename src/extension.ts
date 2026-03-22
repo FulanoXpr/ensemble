@@ -1,20 +1,42 @@
 import * as vscode from 'vscode'
+import { VSCodeRuntime } from './runtime/vscode-runtime.js'
+import { setRuntime } from './core/runtime-singleton.js'
+import { initEnsemblePaths } from './core/ensemble-paths.js'
+import { EmbeddedServer } from './service/embedded-server.js'
+import { registerCommands } from './commands/index.js'
 
-let globalContext: vscode.ExtensionContext | undefined
+let server: EmbeddedServer | undefined
+let runtime: VSCodeRuntime | undefined
 
-export function activate(context: vscode.ExtensionContext) {
-  globalContext = context
+export async function activate(context: vscode.ExtensionContext) {
+  const output = vscode.window.createOutputChannel('Ensemble')
+  context.subscriptions.push(output)
 
-  const outputChannel = vscode.window.createOutputChannel('Ensemble')
-  context.subscriptions.push(outputChannel)
-  outputChannel.appendLine('Ensemble extension activated')
+  // 1. Init paths
+  initEnsemblePaths(context.globalStorageUri.fsPath)
+
+  // 2. Init runtime
+  runtime = new VSCodeRuntime()
+  setRuntime(runtime)
+
+  // 3. Start embedded server
+  const port = vscode.workspace.getConfiguration('ensemble').get<number>('serverPort') ?? 23000
+  server = new EmbeddedServer(port)
+  try {
+    const actualPort = await server.start()
+    output.appendLine(`Ensemble server started on port ${actualPort}`)
+  } catch (err) {
+    output.appendLine(`Failed to start server: ${err}`)
+    vscode.window.showWarningMessage(`Ensemble: Could not start server on port ${port}`)
+  }
+
+  // 4. Register commands
+  registerCommands(context)
+
+  output.appendLine('Ensemble extension activated')
 }
 
-export function deactivate() {
-  globalContext = undefined
-}
-
-export function getExtensionContext(): vscode.ExtensionContext {
-  if (!globalContext) throw new Error('Extension not activated')
-  return globalContext
+export async function deactivate() {
+  runtime?.disposeAll()
+  await server?.stop()
 }
