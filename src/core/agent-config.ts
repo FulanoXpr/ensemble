@@ -14,7 +14,7 @@ export function loadAgentsConfig(): AgentsConfig {
   if (_cache) return _cache
 
   const configPath = process.env['ENSEMBLE_AGENTS_CONFIG']
-    || path.join(__dirname, '..', '..', 'agents.json')
+    || path.join(__dirname, '..', 'agents.json')
 
   const raw = fs.readFileSync(configPath, 'utf-8')
   _cache = JSON.parse(raw) as AgentsConfig
