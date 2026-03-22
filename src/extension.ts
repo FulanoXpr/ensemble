@@ -6,6 +6,7 @@ export function activate(context: vscode.ExtensionContext) {
   globalContext = context
 
   const outputChannel = vscode.window.createOutputChannel('Ensemble')
+  context.subscriptions.push(outputChannel)
   outputChannel.appendLine('Ensemble extension activated')
 }
 
