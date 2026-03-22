@@ -4,6 +4,7 @@ import { setRuntime } from './core/runtime-singleton.js'
 import { initEnsemblePaths } from './core/ensemble-paths.js'
 import { EmbeddedServer } from './service/embedded-server.js'
 import { registerCommands } from './commands/index.js'
+import { SidebarProvider } from './views/sidebar-provider.js'
 
 let server: EmbeddedServer | undefined
 let runtime: VSCodeRuntime | undefined
@@ -32,6 +33,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // 4. Register commands
   registerCommands(context)
+
+  // 5. Register sidebar webview provider
+  const sidebarProvider = new SidebarProvider(context.extensionUri)
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider('ensemble.sidebar', sidebarProvider)
+  )
 
   output.appendLine('Ensemble extension activated')
 }
