@@ -218,10 +218,9 @@ describe('VSCodeRuntime', () => {
     await runtime.unsetEnvironment('env-test', 'MY_VAR')
   })
 
-  it('setEnvironment throws for unknown session', async () => {
-    await expect(runtime.setEnvironment('ghost', 'K', 'V')).rejects.toThrow(
-      'Session "ghost" not found',
-    )
+  it('setEnvironment is a no-op even for unknown sessions', async () => {
+    // No-op — VSCode terminals cannot modify env after creation
+    await expect(runtime.setEnvironment('ghost', 'K', 'V')).resolves.toBeUndefined()
   })
 })
 

@@ -17,7 +17,6 @@ interface ManagedTerminal {
   createdAt: Date
   pty: vscode.Pseudoterminal
   process?: ChildProcess
-  env?: Record<string, string>
 }
 
 /**
@@ -141,7 +140,9 @@ export class VSCodeRuntime implements AgentRuntime {
 
   /**
    * Create a process-backed pseudoterminal.
-   * Spawns `command` via child_process.spawn with shell:true.
+   * Spawns `command` as a shell string via child_process.spawn with shell:true.
+   * The `command` parameter is a full shell command (e.g., "codex --full-auto"),
+   * NOT a parsed command+args — shell:true is intentional and load-bearing.
    * Process stdout/stderr feed into both the writeEmitter (terminal display)
    * and the OutputBuffer (programmatic capture).
    */
@@ -165,6 +166,7 @@ export class VSCodeRuntime implements AgentRuntime {
     proc.stdout?.on('data', feedData)
     proc.stderr?.on('data', feedData)
     proc.on('close', (code) => {
+      this.terminals.delete(name)
       closeEmitter.fire(code ?? 0)
     })
 
@@ -278,21 +280,17 @@ export class VSCodeRuntime implements AgentRuntime {
 
   // ── Environment ───────────────────────────────────────────
 
-  async setEnvironment(name: string, key: string, value: string): Promise<void> {
-    const t = this.terminals.get(name)
-    if (!t) throw new Error(`Session "${name}" not found`)
-    if (!t.env) t.env = {}
-    t.env[key] = value
-    // For process-backed terminals we could write export commands,
-    // but the primary use is passing env at spawn time.
+  /**
+   * No-op in VSCode. Environment variables must be set before process spawn
+   * via createProcessSession. VSCode terminals don't support per-session env
+   * changes after creation.
+   */
+  async setEnvironment(_name: string, _key: string, _value: string): Promise<void> {
+    // No-op: VSCode terminals cannot modify env after creation
   }
 
-  async unsetEnvironment(name: string, key: string): Promise<void> {
-    const t = this.terminals.get(name)
-    if (!t) throw new Error(`Session "${name}" not found`)
-    if (t.env) {
-      delete t.env[key]
-    }
+  async unsetEnvironment(_name: string, _key: string): Promise<void> {
+    // No-op
   }
 
   // ── PTY / Attach ──────────────────────────────────────────
@@ -334,8 +332,8 @@ export class VSCodeRuntime implements AgentRuntime {
    * Kill all terminals and clean up.
    */
   disposeAll(): void {
-    for (const [name] of this.terminals) {
-      // Use void to fire-and-forget the async killSession
+    const names = Array.from(this.terminals.keys())
+    for (const name of names) {
       void this.killSession(name)
     }
   }
