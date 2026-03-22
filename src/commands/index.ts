@@ -3,9 +3,12 @@ import { createTeamCommand } from './create-team.js'
 import { disbandTeamCommand } from './disband-team.js'
 import { sendMessageCommand } from './send-message.js'
 import { listTeamsCommand } from './list-teams.js'
-import { showMissionControlCommand } from './show-mission-control.js'
+import { showMissionControlCommand, initMissionControlUri } from './show-mission-control.js'
 
 export function registerCommands(context: vscode.ExtensionContext): void {
+  // Store extensionUri so the Mission Control webview can reference it
+  initMissionControlUri(context.extensionUri)
+
   context.subscriptions.push(
     vscode.commands.registerCommand('ensemble.createTeam', createTeamCommand),
     vscode.commands.registerCommand('ensemble.disbandTeam', disbandTeamCommand),
